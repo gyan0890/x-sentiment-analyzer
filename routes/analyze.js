@@ -29,11 +29,30 @@ router.post("/", async (req, res) => {
 
       const formattedTweets = rawTweets.map((t, i) => `${i + 1}. ${t}`).join("\n\n");
 
-      const prompt = `Analyze the following tweets from @${handle}. For each one, give:
-1. Sentiment (Positive, Neutral, Negative)
-2. Topic (e.g., infra, meme, product update, community, alpha leak)
+      const prompt = `You are a tweet sentiment and topic classifier.
 
-Tweets:\n\n${formattedTweets}`;
+      Analyze each tweet below and return:
+      1. Sentiment — Positive, Neutral, or Negative
+      2. Topic — e.g., infra, meme, product update, community, alpha leak, event, or general
+
+      If a tweet is very short or ambiguous, do your best to infer meaning.  
+      If unsure, default to:
+      - Sentiment: Neutral
+      - Topic: General
+
+      Respond in this format:
+
+      1. Tweet 1  
+        - Sentiment: <Positive | Neutral | Negative>  
+        - Topic: <topic>  
+
+      2. Tweet 2  
+        - Sentiment: ...  
+        - Topic: ...
+
+      Tweets from @${handle}:
+      ${formattedTweets}
+      `;
 
       const gptRes = await openai.chat.completions.create({
         model: "gpt-4o",
