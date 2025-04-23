@@ -27,32 +27,48 @@ router.post("/", async (req, res) => {
         continue;
       }
 
-      const formattedTweets = rawTweets.map((t, i) => `${i + 1}. ${t}`).join("\n\n");
-
-      const prompt = `You are a tweet sentiment and topic classifier.
-
-      Analyze each tweet below and return:
-      1. Sentiment — Positive, Neutral, or Negative
-      2. Topic — e.g., infra, meme, product update, community, alpha leak, event, or general
-
-      If a tweet is very short or ambiguous, do your best to infer meaning.  
-      If unsure, default to:
-      - Sentiment: Neutral
-      - Topic: General
-
+      const formattedTweets = rawTweets.map((t, i) => {
+        const engagementSummary = t.likes || t.replies || t.bookmarks || t.quotes
+          ? `Engagement:\n- Likes: ${t.likes || 0}\n- Replies: ${t.replies || 0}\n- Quotes: ${t.quotes || 0}\n- Bookmarks: ${t.bookmarks || 0}\n`
+          : '';
+      
+        const commentsText = t.comments && t.comments.length
+          ? `Top Comments:\n${t.comments.slice(0, 3).map((c, idx) => `${idx + 1}. ${c}`).join('\n')}\n`
+          : '';
+      
+        return `${i + 1}. Tweet:\n"${t.content}"\n${engagementSummary}${commentsText}`;
+      }).join("\n\n");
+      
+      const prompt = `You are a sentiment and topic classifier for tweets.
+      
+      Analyze each tweet below using the content, engagement metrics, and top comments. Filter out scammy or repetitive comments (e.g., coin promotions, giveaways).
+      
+      For each tweet, determine:
+      - Sentiment (Positive, Neutral, or Negative)
+      - Topic (e.g., infra, meme, product update, community, alpha leak, announcement, general)
+      - Public reaction (e.g., enthusiastic, skeptical, mixed)
+      
+      Guidance:
+      - High likes and bookmarks indicate positive reception.
+      - Many replies with low likes may signal controversy.
+      - Filter comments that appear spammy or repetitive.
+      
       Respond in this format:
-
-      1. Tweet 1  
-        - Sentiment: <Positive | Neutral | Negative>  
-        - Topic: <topic>  
-
-      2. Tweet 2  
-        - Sentiment: ...  
-        - Topic: ...
-
+      
+      1. Tweet 1
+         - Sentiment: <Positive | Neutral | Negative>
+         - Topic: <topic>
+         - Public Reaction: <summary>
+      
+      2. Tweet 2
+         - Sentiment: ...
+         - Topic: ...
+         - Public Reaction: ...
+      
       Tweets from @${handle}:
       ${formattedTweets}
       `;
+      
 
       const gptRes = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -63,9 +79,18 @@ router.post("/", async (req, res) => {
 
       results.push({
         handle,
-        tweets: rawTweets,
+        tweets: rawTweets.map((t) => ({
+          content: t.content,
+          timestamp: t.timestamp,
+          likes: t.likes || 0,
+          replies: t.replies || 0,
+          quotes: t.quotes || 0,
+          bookmarks: t.bookmarks || 0,
+          comments: Array.isArray(t.comments) ? t.comments : [],
+        })),
         summary,
       });
+      
 
       console.log(`✅ Successfully scraped and analyzed @${handle}`);
     } catch (err) {
